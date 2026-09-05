@@ -38,6 +38,7 @@ Find nodes by name and/or type. Searches the RUNNING game's live tree when a gam
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
+| `session_id` | integer | No | Target instance session_id from godot_editor_read list_instances. This ID is distinct from the debugger slot and is never reassigned within an editor lifetime. May be omitted when only one game is running. Multiple games require an explicit ID; a stopped ID never selects another game. Run operations on the same instance sequentially; a busy instance rejects overlapping requests. Different instances can run concurrently. |
 | `name_pattern` | string | No | Glob pattern to match node names, e.g. "*Spawner*", "Turret?" |
 | `type` | string | No | Filter by node type, e.g. "CharacterBody2D", "Area2D" |
 | `root_path` | string | No | Path to start search from (defaults to scene root). An absolute /root/... path may name an autoload or any node beside the scene. |

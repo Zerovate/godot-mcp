@@ -25,11 +25,11 @@ func validate_meshes(params: Dictionary) -> Dictionary:
 
 
 func _send_and_wait(msg_type: String, args: Array, timeout: float):
-	if not EditorInterface.is_playing_scene():
+	if not _has_game_session():
 		_last_error = _error("NOT_RUNNING", "No game is currently running")
 		return null
 
-	var debugger_plugin = _plugin.get_debugger_plugin() if _plugin else null
+	var debugger_plugin = _get_debugger_plugin()
 	if debugger_plugin == null or not debugger_plugin.has_active_session():
 		_last_error = _error("NO_SESSION", "No active debug session")
 		return null
@@ -42,6 +42,9 @@ func _send_and_wait(msg_type: String, args: Array, timeout: float):
 	var start_time := Time.get_ticks_msec()
 	while not debugger_plugin.has_response(msg_type):
 		await Engine.get_main_loop().process_frame
+		if not debugger_plugin.has_active_session():
+			_last_error = _error("GAME_EXITED", "Selected game instance ended while waiting for %s" % msg_type)
+			return null
 		if (Time.get_ticks_msec() - start_time) / 1000.0 > timeout:
 			debugger_plugin.clear_response(msg_type)
 			_last_error = _error("TIMEOUT", "Timed out waiting for %s response" % msg_type)

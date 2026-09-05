@@ -21,10 +21,10 @@ func get_commands() -> Dictionary:
 
 
 func get_performance_metrics(_params: Dictionary) -> Dictionary:
-	if not EditorInterface.is_playing_scene():
+	if not _has_game_session():
 		return _error("NOT_RUNNING", "No game is currently running")
 
-	var debugger_plugin = _plugin.get_debugger_plugin() if _plugin else null
+	var debugger_plugin = _get_debugger_plugin()
 	if debugger_plugin == null or not debugger_plugin.has_active_session():
 		return _error("NO_SESSION", "No active debug session")
 
@@ -43,6 +43,8 @@ func get_performance_metrics(_params: Dictionary) -> Dictionary:
 				debugger_plugin.performance_metrics_received.disconnect(_on_performance_metrics_received)
 			return _error("TIMEOUT", "Timed out waiting for performance metrics")
 
+	if not debugger_plugin.has_active_session():
+		return _error("GAME_EXITED", "Selected game instance ended during metrics request")
 	return _success(_performance_metrics_result)
 
 
@@ -52,10 +54,10 @@ func _on_performance_metrics_received(metrics: Dictionary) -> void:
 
 
 func start_profiler(_params: Dictionary) -> Dictionary:
-	if not EditorInterface.is_playing_scene():
+	if not _has_game_session():
 		return _error("NOT_RUNNING", "No game is currently running")
 
-	var debugger_plugin = _plugin.get_debugger_plugin() if _plugin else null
+	var debugger_plugin = _get_debugger_plugin()
 	if debugger_plugin == null or not debugger_plugin.has_active_session():
 		return _error("NO_SESSION", "No active debug session")
 
@@ -64,10 +66,10 @@ func start_profiler(_params: Dictionary) -> Dictionary:
 
 
 func stop_profiler(_params: Dictionary) -> Dictionary:
-	if not EditorInterface.is_playing_scene():
+	if not _has_game_session():
 		return _error("NOT_RUNNING", "No game is currently running")
 
-	var debugger_plugin = _plugin.get_debugger_plugin() if _plugin else null
+	var debugger_plugin = _get_debugger_plugin()
 	if debugger_plugin == null or not debugger_plugin.has_active_session():
 		return _error("NO_SESSION", "No active debug session")
 
@@ -116,11 +118,11 @@ var _last_error: Dictionary = {}
 
 
 func _send_and_wait(msg_type: String, args: Array = []):
-	if not EditorInterface.is_playing_scene():
+	if not _has_game_session():
 		_last_error = _error("NOT_RUNNING", "No game is currently running")
 		return null
 
-	var debugger_plugin = _plugin.get_debugger_plugin() if _plugin else null
+	var debugger_plugin = _get_debugger_plugin()
 	if debugger_plugin == null or not debugger_plugin.has_active_session():
 		_last_error = _error("NO_SESSION", "No active debug session")
 		return null
@@ -133,6 +135,9 @@ func _send_and_wait(msg_type: String, args: Array = []):
 	var start_time := Time.get_ticks_msec()
 	while not debugger_plugin.has_response(msg_type):
 		await Engine.get_main_loop().process_frame
+		if not debugger_plugin.has_active_session():
+			_last_error = _error("GAME_EXITED", "Selected game instance ended while waiting for %s" % msg_type)
+			return null
 		if (Time.get_ticks_msec() - start_time) / 1000.0 > GENERIC_TIMEOUT:
 			debugger_plugin.clear_response(msg_type)
 			_last_error = _error("TIMEOUT", "Timed out waiting for %s response" % msg_type)

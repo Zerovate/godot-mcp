@@ -3,10 +3,20 @@ class_name MCPBaseCommand
 extends RefCounted
 
 var _plugin: EditorPlugin
+var _game_session: MCPGameSession
 
 
-func setup(plugin: EditorPlugin) -> void:
+func setup(plugin: EditorPlugin, session: MCPGameSession = null) -> void:
 	_plugin = plugin
+	_game_session = session
+
+
+func _get_debugger_plugin() -> MCPGameSession:
+	return _game_session
+
+
+func _has_game_session() -> bool:
+	return _game_session != null and _game_session.has_active_session()
 
 
 func get_commands() -> Dictionary:

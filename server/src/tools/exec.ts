@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { sessionId } from './session-target.js';
 import { defineTool } from '../core/define-tool.js';
 import { structured } from '../core/structured.js';
 import { deriveTimeouts, EXEC_BUDGET_CAP_MS } from '../connection/timeouts.js';
@@ -13,6 +14,7 @@ const EXEC_DEFAULT_BUDGET_MS = 10_000;
 
 const ExecSchema = z.discriminatedUnion('action', [
   z.object({
+    session_id: sessionId,
     action: z
       .literal('run')
       .describe('Run one-shot GDScript inside the running game and return its value'),
@@ -52,15 +54,18 @@ const ExecSchema = z.discriminatedUnion('action', [
       ),
   }),
   z.object({
+    session_id: sessionId,
     action: z
       .literal('list')
       .describe('List the nodes currently attached under the exec holder (name, class, age, processing state)'),
   }),
   z.object({
+    session_id: sessionId,
     action: z.literal('remove').describe('Remove one exec holder child by name (queue_free)'),
     name: z.string().min(1).describe('Node name as reported by list'),
   }),
   z.object({
+    session_id: sessionId,
     action: z.literal('clear').describe('Remove every exec holder child (queue_free all)'),
   }),
 ]);
@@ -104,7 +109,7 @@ export const exec = defineTool({
         const t = deriveTimeouts(args.budget_ms ?? EXEC_DEFAULT_BUDGET_MS);
         const result = await godot.sendCommand<ExecRunResult>(
           'exec_run',
-          { source: args.source, relay_timeout_ms: t.relayMs },
+          { session_id: args.session_id, source: args.source, relay_timeout_ms: t.relayMs },
           { timeoutMs: t.serverMs }
         );
         return structured(result);
@@ -114,7 +119,7 @@ export const exec = defineTool({
         const result = await godot.sendCommand<{
           nodes: Array<{ name: string; class: string; script_chars: number; age_ms: number; processing: boolean }>;
           count: number;
-        }>('exec_list');
+        }>('exec_list', { session_id: args.session_id });
         // Structured in both branches: a result whose SHAPE depends on runtime
         // data would make the empty case unparseable for structured readers.
         return structured(result);
@@ -123,13 +128,13 @@ export const exec = defineTool({
       case 'remove': {
         const result = await godot.sendCommand<{ removed: boolean; name: string; remaining: number }>(
           'exec_remove',
-          { name: args.name }
+          { session_id: args.session_id, name: args.name }
         );
         return structured(result);
       }
 
       case 'clear': {
-        const result = await godot.sendCommand<{ removed_count: number }>('exec_clear');
+        const result = await godot.sendCommand<{ removed_count: number }>('exec_clear', { session_id: args.session_id });
         return `Removed ${result.removed_count} exec node(s).`;
       }
     }

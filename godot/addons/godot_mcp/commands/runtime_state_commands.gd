@@ -56,11 +56,11 @@ func watch_stop(_params: Dictionary) -> Dictionary:
 
 
 func _send_and_wait(msg_type: String, args: Array = []):
-	if not EditorInterface.is_playing_scene():
+	if not _has_game_session():
 		_last_error = _error("NOT_RUNNING", "No game is currently running")
 		return null
 
-	var debugger_plugin = _plugin.get_debugger_plugin() if _plugin else null
+	var debugger_plugin = _get_debugger_plugin()
 	if debugger_plugin == null or not debugger_plugin.has_active_session():
 		_last_error = _error("NO_SESSION", "No active debug session")
 		return null

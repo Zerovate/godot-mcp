@@ -15,6 +15,11 @@
         ],
         "description": "freeze: Pause the game under agent control. All observation tools (screenshots, runtime state, godot_node_read find) keep working while frozen — take as long as you need.\nstep: Advance a bounded slice of game time, then re-freeze. Freezes first if the game is running, so step is always a safe first call. Pass exactly one of duration_ms or frames.\nstep_until: Advance game time until a GDScript predicate becomes true (or a safety cap is hit), then re-freeze. Freezes first if the game is running, so it is a safe first call. Use this instead of step when you do not know how long to advance to reach the state worth observing.\nthaw: Resume real-time play, restoring the game's own pause state (an open pause menu stays open).\nstatus: Report the freeze state: `frozen` is authoritative for the current state; `frozen_wall_ms` is real wall-clock held (not game time); `launched_frozen` is a historical flag (this run booted frozen) and stays true after thaw. Also reports the game's own pause intent, time scale, and whether game code is contesting the freeze."
       },
+      "session_id": {
+        "description": "Target instance session_id from godot_editor_read list_instances. This ID is distinct from the debugger slot and is never reassigned within an editor lifetime. May be omitted when only one game is running. Multiple games require an explicit ID; a stopped ID never selects another game. Run operations on the same instance sequentially; a busy instance rejects overlapping requests. Different instances can run concurrently.",
+        "type": "integer",
+        "minimum": 0
+      },
       "duration_ms": {
         "description": "Game time to advance in milliseconds (max 50000; loop steps for longer). Scaled by Engine.time_scale like normal play. Mutually exclusive with frames. (for: step)",
         "type": "integer",

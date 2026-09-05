@@ -1,6 +1,6 @@
 {
   "name": "godot_editor_edit",
-  "description": "Drive the editor: select a node, run or stop the project, restart the editor, rescan the filesystem to import assets written outside the editor, and center/zoom the 2D viewport. Use run with frozen=true as the deterministic-playtest entry point (game time holds at frame 0 until godot_game_time steps or thaws it). To test edited gameplay scripts just stop then run — the launched game loads .gd/.tscn fresh from disk; reserve restart for EDITOR-side staleness (edited @tool/addon code, a stale project.godot, or a cached .gdshader). For observation only (state, selection, logs, screenshots) use godot_editor_read instead; restart does not start a cold editor, so one must already be running.",
+  "description": "Drive the editor: select a node, run one to four game instances, launch another instance with its own user arguments, stop one explicit session_id or stop_all, restart the editor, rescan the filesystem to import assets written outside the editor, and center/zoom the 2D viewport. Use run with frozen=true as the deterministic-playtest entry point (game time holds at frame 0 until godot_game_time steps or thaws it). To test edited gameplay scripts just stop then run — the launched game loads .gd/.tscn fresh from disk; reserve restart for EDITOR-side staleness (edited @tool/addon code, a stale project.godot, or a cached .gdshader). For observation only (state, selection, logs, screenshots) use godot_editor_read instead; restart does not start a cold editor, so one must already be running.",
   "inputSchema": {
     "type": "object",
     "properties": {
@@ -9,24 +9,44 @@
         "enum": [
           "select",
           "run",
+          "launch",
           "stop",
+          "stop_all",
           "restart",
           "rescan",
           "set_viewport_2d"
         ],
-        "description": "select: Select a node in the editor\nrun: Run the project\nstop: Stop the running project\nrestart: Restart the editor, reloading project.godot (autoloads, input map), addon code, and plugins from disk. Use it for EDITOR-side staleness only: edited @tool/addon/plugin code, changed autoloads or input map, or a .gdshader the editor still renders from a cached compile. NOT needed to test edited gameplay scripts — a launched game loads .gd/.tscn fresh from disk, so godot_editor_edit stop then run already runs the new code. Fire-and-forget: the bridge drops and auto-reconnects within a few seconds. Does not start a cold editor - the editor must already be running.\nrescan: Rescan the project filesystem so the editor imports assets written to disk outside the editor (textures, audio, fonts, .tres) without a restart. Do this after writing a new asset and before opening or reloading a scene that references it; otherwise the resource loads empty because no .import exists yet. Returns once the scan and its imports have finished.\nset_viewport_2d: Center and/or zoom the 2D editor viewport. Pass at least one parameter; omitted parameters PRESERVE the current view (e.g. pass only zoom to zoom in on the current center). The addon reads the live viewport transform to fill in whatever you leave out."
+        "description": "select: Select a node in the editor\nrun: Start a fresh run. Fails if any game is already active; use launch to append an instance or stop_all before a fresh run.\nlaunch: Append one game instance to this editor. Requires an existing ready instance to discover the actual debugger endpoint.\nstop: Stop one game instance. Omit session_id only when exactly one instance is active. Other instances keep running.\nstop_all: Stop every game instance controlled by this editor\nrestart: Restart the editor, reloading project.godot (autoloads, input map), addon code, and plugins from disk. Use it for EDITOR-side staleness only: edited @tool/addon/plugin code, changed autoloads or input map, or a .gdshader the editor still renders from a cached compile. NOT needed to test edited gameplay scripts — a launched game loads .gd/.tscn fresh from disk, so godot_editor_edit stop then run already runs the new code. Fire-and-forget: the bridge drops and auto-reconnects within a few seconds. Does not start a cold editor - the editor must already be running.\nrescan: Rescan the project filesystem so the editor imports assets written to disk outside the editor (textures, audio, fonts, .tres) without a restart. Do this after writing a new asset and before opening or reloading a scene that references it; otherwise the resource loads empty because no .import exists yet. Returns once the scan and its imports have finished.\nset_viewport_2d: Center and/or zoom the 2D editor viewport. Pass at least one parameter; omitted parameters PRESERVE the current view (e.g. pass only zoom to zoom in on the current center). The addon reads the live viewport transform to fill in whatever you leave out."
       },
       "node_path": {
         "type": "string",
         "description": "Path to node to select (required for: select)"
       },
+      "instances": {
+        "description": "Number of game instances to start (default 1, maximum 4). Each returns its own session_id. (for: run)",
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 4
+      },
       "scene_path": {
-        "description": "Scene to run (optional, defaults to main scene) (for: run)",
+        "description": "for run: Scene to run (optional, defaults to main scene); for launch: Scene to run (defaults to the project main scene) (for: run, launch)",
         "type": "string"
       },
       "frozen": {
-        "description": "Launch with game time frozen from frame 0 (gameplay never starts racing your latency). Use godot_game_time step/thaw to advance. (for: run)",
+        "description": "for run: Launch with game time frozen from frame 0 (gameplay never starts racing your latency). Use godot_game_time step/thaw to advance.; for launch: Launch this instance frozen from frame 0 (for: run, launch)",
         "type": "boolean"
+      },
+      "args": {
+        "description": "Game user arguments after --, passed as separate arguments. Use different values for host/client roles or game network ports. (for: launch)",
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "session_id": {
+        "description": "Target instance session_id from godot_editor_read list_instances. This ID is distinct from the debugger slot and is never reassigned within an editor lifetime. May be omitted when only one game is running. Multiple games require an explicit ID; a stopped ID never selects another game. Run operations on the same instance sequentially; a busy instance rejects overlapping requests. Different instances can run concurrently. (for: stop)",
+        "type": "integer",
+        "minimum": 0
       },
       "save": {
         "description": "Save the project before restarting (default: true). Set false to discard unsaved editor changes. (for: restart)",

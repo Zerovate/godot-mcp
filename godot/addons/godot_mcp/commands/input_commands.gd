@@ -55,7 +55,7 @@ func _pushed_budget(params: Dictionary, fallback: float) -> float:
 # lands in a game with nothing to receive it.
 func _await_bridge_ready(debugger_plugin, op_start: int, total_budget: float) -> bool:
 	while not debugger_plugin.is_bridge_ready():
-		if not EditorInterface.is_playing_scene():
+		if not _has_game_session():
 			return false  # game stopped or crashed while we waited
 		await Engine.get_main_loop().process_frame
 		var elapsed := (Time.get_ticks_msec() - op_start) / 1000.0
@@ -65,10 +65,10 @@ func _await_bridge_ready(debugger_plugin, op_start: int, total_budget: float) ->
 
 
 func get_input_map(_params: Dictionary) -> Dictionary:
-	if not EditorInterface.is_playing_scene():
+	if not _has_game_session():
 		return _get_editor_input_map()
 
-	var debugger_plugin = _plugin.get_debugger_plugin() if _plugin else null
+	var debugger_plugin = _get_debugger_plugin()
 	if debugger_plugin == null or not debugger_plugin.has_active_session():
 		return _get_editor_input_map()
 
@@ -85,8 +85,10 @@ func get_input_map(_params: Dictionary) -> Dictionary:
 			_input_map_pending = false
 			if debugger_plugin.input_map_received.is_connected(_on_input_map_received):
 				debugger_plugin.input_map_received.disconnect(_on_input_map_received)
-			return _get_editor_input_map()
+			return _error("TIMEOUT", "Input map request timed out for the selected game instance")
 
+	if not debugger_plugin.has_active_session():
+		return _error("GAME_EXITED", "Selected game instance ended during input map request")
 	return _success(_input_map_result)
 
 
@@ -186,10 +188,10 @@ func execute_input_sequence(params: Dictionary) -> Dictionary:
 	if inputs.is_empty():
 		return _error("INVALID_PARAMS", "inputs array is required and must not be empty")
 
-	if not EditorInterface.is_playing_scene():
+	if not _has_game_session():
 		return _error("NOT_RUNNING", "No game is currently running")
 
-	var debugger_plugin = _plugin.get_debugger_plugin() if _plugin else null
+	var debugger_plugin = _get_debugger_plugin()
 	if debugger_plugin == null:
 		return _error("NO_SESSION", "No active debug session")
 	# One deadline for the whole call, stamped BEFORE the ready-wait so the
@@ -273,10 +275,10 @@ func type_text(params: Dictionary) -> Dictionary:
 	if text.is_empty():
 		return _error("INVALID_PARAMS", "text is required and must not be empty")
 
-	if not EditorInterface.is_playing_scene():
+	if not _has_game_session():
 		return _error("NOT_RUNNING", "No game is currently running")
 
-	var debugger_plugin = _plugin.get_debugger_plugin() if _plugin else null
+	var debugger_plugin = _get_debugger_plugin()
 	if debugger_plugin == null:
 		return _error("NO_SESSION", "No active debug session")
 	# Shared deadline (ready-wait + typing), stamped before the ready-wait so the

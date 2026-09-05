@@ -14,7 +14,6 @@ const BASE_TIMEOUT := 10.0
 const RUN_TIMEOUT := 28.0
 
 var _last_error: Dictionary = {}
-var _call_seq := 0
 
 
 func get_commands() -> Dictionary:
@@ -56,8 +55,7 @@ func _relay(msg_type: String, params: Dictionary, timeout: float) -> Dictionary:
 	# the next call of the same type — wrong result, silently, and every result
 	# after it shifted by one. The bridge echoes call_id; the wait loop discards
 	# mismatches. A response with no call_id (older addon) is accepted as-is.
-	_call_seq += 1
-	var call_id := _call_seq
+	var call_id := _get_debugger_plugin().next_call_id()
 	params = params.duplicate()
 	params["call_id"] = call_id
 	var response = await _send_and_wait(msg_type, [params], timeout, call_id)
@@ -72,11 +70,11 @@ func _relay(msg_type: String, params: Dictionary, timeout: float) -> Dictionary:
 
 
 func _send_and_wait(msg_type: String, args: Array, timeout: float, call_id: int):
-	if not EditorInterface.is_playing_scene():
+	if not _has_game_session():
 		_last_error = _error("NOT_RUNNING", "No game is currently running")
 		return null
 
-	var debugger_plugin = _plugin.get_debugger_plugin() if _plugin else null
+	var debugger_plugin = _get_debugger_plugin()
 	if debugger_plugin == null or not debugger_plugin.has_active_session():
 		_last_error = _error("NO_SESSION", "No active debug session")
 		return null

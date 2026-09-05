@@ -133,7 +133,8 @@ describe('watch wire contract (#286)', () => {
 
     const call = mock.calls.find((c) => c.command === 'watch_start');
     expect(call, 'watch_start command was sent').toBeDefined();
-    expect(Object.keys(call!.params).sort()).toEqual([...contract.watch_start_request.required].sort());
+    expect(Object.keys(call!.params).filter((key) => call!.params[key] !== undefined).sort())
+      .toEqual([...contract.watch_start_request.required].sort());
   });
 
   // ── watch_start response: what the server READS ────────────────────────────
