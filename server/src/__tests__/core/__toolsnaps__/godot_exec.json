@@ -14,6 +14,11 @@
         ],
         "description": "run: Run one-shot GDScript inside the running game and return its value\nlist: List the nodes currently attached under the exec holder (name, class, age, processing state)\nremove: Remove one exec holder child by name (queue_free)\nclear: Remove every exec holder child (queue_free all)"
       },
+      "session_id": {
+        "description": "Target instance session_id from godot_editor_read list_instances. This ID is distinct from the debugger slot and is never reassigned within an editor lifetime. May be omitted when only one game is running. Multiple games require an explicit ID; a stopped ID never selects another game. Run operations on the same instance sequentially; a busy instance rejects overlapping requests. Different instances can run concurrently.",
+        "type": "integer",
+        "minimum": 0
+      },
       "source": {
         "type": "string",
         "minLength": 1,

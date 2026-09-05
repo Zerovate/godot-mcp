@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { sessionId } from './session-target.js';
 import { defineTool } from '../core/define-tool.js';
 import { structured } from '../core/structured.js';
 import type { AnyToolDefinition } from '../core/types.js';
@@ -29,6 +30,7 @@ const NodeReadSchema = z
         .describe('Cap how many children are listed per node. Omit to list every child.'),
     }),
     z.object({
+      session_id: sessionId,
       action: z
         .literal('find')
         .describe(
@@ -106,6 +108,7 @@ export const nodeRead = defineTool({
           matches: Array<{ path: string; type: string }>;
           count: number;
         }>('find_nodes', {
+          session_id: args.session_id,
           name_pattern: args.name_pattern,
           type: args.type,
           root_path: args.root_path,

@@ -1,12 +1,13 @@
 {
   "name": "godot_editor_read",
-  "description": "Observe the editor and running game: get editor state (open scene, play state, camera, viewport), read the current node selection, pull editor log messages (with an incremental cursor) and stack traces, and capture lossless PNG screenshots of the running game or an editor viewport. Reach for it to check what the editor sees before and after a change; screenshot_game needs a running game, while every other action works in the bare editor. It changes nothing - to select nodes, run/stop/restart, or move the 2D viewport use godot_editor_edit; errors from the running game (not the editor process) come via minimal-godot-mcp's get_console_output when that companion server is installed.",
+  "description": "Observe the editor and running games: list_instances returns target IDs and readiness; get editor state (open scene, play state, camera, viewport), read the current node selection, pull editor log messages (with an incremental cursor) and stack traces, and capture lossless PNG screenshots of the running game or an editor viewport. Reach for it to check what the editor sees before and after a change; screenshot_game needs a running game, while every other action works in the bare editor. It changes nothing - to select nodes, run/stop/restart, or move the 2D viewport use godot_editor_edit; errors from the running game (not the editor process) come via minimal-godot-mcp's get_console_output when that companion server is installed.",
   "inputSchema": {
     "type": "object",
     "properties": {
       "action": {
         "type": "string",
         "enum": [
+          "list_instances",
           "get_state",
           "get_selection",
           "get_log_messages",
@@ -14,7 +15,7 @@
           "screenshot_game",
           "screenshot_editor"
         ],
-        "description": "get_state: Get editor state: current scene, play state, version, camera, viewport\nget_selection: Get the currently selected nodes\nget_log_messages: Get errors and warnings from the EDITOR process - @tool script runtime errors, import failures, addon errors, and failures from editor-side operations (scene/resource edits, reloads). This is the feedback channel for editor-side changes: run it after a mutation to confirm it did not break the editor. It does NOT include errors from the running game - for those, use minimal-godot-mcp's get_console_output (game console via DAP). Filter by severity (errors-only = \"did my change break the editor?\") and use `since`/`cursor` to read only what is new; every response returns the current `cursor`, even when empty.\nget_stack_trace: Get the most recent error stack trace\nscreenshot_game: Capture a lossless PNG of the running game. Each frame persists in context every later turn and never decays, so reserve it for genuine APPEARANCE judgments (spacing, color, art, \"does it look right\"). For STRUCTURE or state — which control is focused, a label's text, whether a panel is visible, a node's anchors/size — read cheap text instead: godot_node_read (scene tree, node properties) or godot_runtime_state digest (live values), both ~free versus the hundreds of visual tokens a frame costs. Do not re-shoot a view that has not changed.\nscreenshot_editor: Capture a lossless PNG of an editor viewport. Same context cost as screenshot_game — the frame persists every later turn — so capture for appearance, not for structure/state you could read as cheap text via godot_node_read (scene tree, node properties) or godot_runtime_state."
+        "description": "list_instances: List connected game instances with stable session_id, debugger slot, PID, scene, and readiness. Use session_id to target runtime tools.\nget_state: Get editor state: current scene, play state, version, camera, viewport\nget_selection: Get the currently selected nodes\nget_log_messages: Get errors and warnings from the EDITOR process - @tool script runtime errors, import failures, addon errors, and failures from editor-side operations (scene/resource edits, reloads). This is the feedback channel for editor-side changes: run it after a mutation to confirm it did not break the editor. It does NOT include errors from the running game - for those, use minimal-godot-mcp's get_console_output (game console via DAP). Filter by severity (errors-only = \"did my change break the editor?\") and use `since`/`cursor` to read only what is new; every response returns the current `cursor`, even when empty.\nget_stack_trace: Get the most recent error stack trace\nscreenshot_game: Capture a lossless PNG of the running game. Each frame persists in context every later turn and never decays, so reserve it for genuine APPEARANCE judgments (spacing, color, art, \"does it look right\"). For STRUCTURE or state — which control is focused, a label's text, whether a panel is visible, a node's anchors/size — read cheap text instead: godot_node_read (scene tree, node properties) or godot_runtime_state digest (live values), both ~free versus the hundreds of visual tokens a frame costs. Do not re-shoot a view that has not changed.\nscreenshot_editor: Capture a lossless PNG of an editor viewport. Same context cost as screenshot_game — the frame persists every later turn — so capture for appearance, not for structure/state you could read as cheap text via godot_node_read (scene tree, node properties) or godot_runtime_state."
       },
       "clear": {
         "description": "Clear the editor error buffer after reading (for: get_log_messages)",
@@ -36,6 +37,11 @@
       },
       "since": {
         "description": "Return only messages newer than this cursor. Pass back the `cursor` from a prior response to see just what is new since then - the incremental check that avoids re-reading the whole buffer (0/omitted = from the beginning). (for: get_log_messages)",
+        "type": "integer",
+        "minimum": 0
+      },
+      "session_id": {
+        "description": "Target instance session_id from godot_editor_read list_instances. This ID is distinct from the debugger slot and is never reassigned within an editor lifetime. May be omitted when only one game is running. Multiple games require an explicit ID; a stopped ID never selects another game. Run operations on the same instance sequentially; a busy instance rejects overlapping requests. Different instances can run concurrently. (for: screenshot_game)",
         "type": "integer",
         "minimum": 0
       },

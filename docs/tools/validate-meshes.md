@@ -16,6 +16,7 @@ Check every code-built (ArrayMesh) surface in the RUNNING game for silent data c
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
+| `session_id` | integer | No | Target instance session_id from godot_editor_read list_instances. This ID is distinct from the debugger slot and is never reassigned within an editor lifetime. May be omitted when only one game is running. Multiple games require an explicit ID; a stopped ID never selects another game. Run operations on the same instance sequentially; a busy instance rejects overlapping requests. Different instances can run concurrently. |
 | `max_findings` | integer | No | Cap on findings returned (default 25). The total count is always reported. |
 
 ---

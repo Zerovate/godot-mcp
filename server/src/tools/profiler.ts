@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { sessionId } from './session-target.js';
 import { defineTool } from '../core/define-tool.js';
 import { structured } from '../core/structured.js';
 import type { AnyToolDefinition } from '../core/types.js';
@@ -202,10 +203,11 @@ export function computeFrameBudget(
 }
 
 const ProfilerSchema = z.discriminatedUnion('action', [
-  z.object({ action: z.literal('snapshot').describe('Full performance snapshot (all engine metrics)') }),
-  z.object({ action: z.literal('start').describe('Start per-frame time-series profiling') }),
-  z.object({ action: z.literal('stop').describe('Stop time-series profiling') }),
+  z.object({ session_id: sessionId, action: z.literal('snapshot').describe('Full performance snapshot (all engine metrics)') }),
+  z.object({ session_id: sessionId, action: z.literal('start').describe('Start per-frame time-series profiling') }),
+  z.object({ session_id: sessionId, action: z.literal('stop').describe('Stop time-series profiling') }),
   z.object({
+    session_id: sessionId,
     action: z
       .literal('get_data')
       .describe(
@@ -213,11 +215,13 @@ const ProfilerSchema = z.discriminatedUnion('action', [
       ),
   }),
   z.object({
+    session_id: sessionId,
     action: z
       .literal('get_active_processes')
       .describe('List scripts with live _process/_physics_process callbacks across the whole tree — scene, autoloads, and nodes attached by godot_exec — tagged by location.'),
   }),
   z.object({
+    session_id: sessionId,
     action: z.literal('get_signal_connections').describe('Inspect signal connections'),
     node_path: z.string().optional().describe('Node to walk from (default: the whole tree — scene, autoloads and exec-attached nodes). An absolute /root/... path may name an autoload.'),
   }),
@@ -235,23 +239,23 @@ export const profiler = defineTool({
     switch (args.action) {
       case 'snapshot': {
         const result = await godot.sendCommand<Record<string, number | string>>(
-          'get_performance_metrics'
+          'get_performance_metrics', { session_id: args.session_id }
         );
         return structured(result);
       }
 
       case 'start': {
-        const result = await godot.sendCommand<{ message: string }>('start_profiler');
+        const result = await godot.sendCommand<{ message: string }>('start_profiler', { session_id: args.session_id });
         return result.message;
       }
 
       case 'stop': {
-        const result = await godot.sendCommand<{ message: string }>('stop_profiler');
+        const result = await godot.sendCommand<{ message: string }>('stop_profiler', { session_id: args.session_id });
         return result.message;
       }
 
       case 'get_data': {
-        const result = await godot.sendCommand<ProfilerDataResponse>('get_profiler_data');
+        const result = await godot.sendCommand<ProfilerDataResponse>('get_profiler_data', { session_id: args.session_id });
         const { frames } = result;
 
         if (frames.length === 0) {
@@ -326,7 +330,7 @@ export const profiler = defineTool({
 
       case 'get_active_processes': {
         const result = await godot.sendCommand<{ processes: ProcessEntry[] }>(
-          'get_active_processes'
+          'get_active_processes', { session_id: args.session_id }
         );
         const { processes } = result;
 
@@ -357,7 +361,7 @@ export const profiler = defineTool({
       case 'get_signal_connections': {
         const result = await godot.sendCommand<{ connections: SignalConnection[] }>(
           'get_signal_connections',
-          { node_path: args.node_path ?? '' }
+          { session_id: args.session_id, node_path: args.node_path ?? '' }
         );
         const { connections } = result;
 

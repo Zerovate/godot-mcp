@@ -286,24 +286,28 @@ describe('editorEdit tool', () => {
   });
 
   describe('run/stop', () => {
-    it('returns appropriate confirmations', async () => {
-      mock.mockResponse({});
+    it('returns structured instance identities from run and stop', async () => {
       const ctx = createToolContext(mock);
-
-      expect(await editorEdit.execute({ action: 'run' }, ctx)).toBe('Running project');
-      expect(await editorEdit.execute({ action: 'run', scene_path: 'res://test.tscn' }, ctx))
-        .toBe('Running scene: res://test.tscn');
-      expect(await editorEdit.execute({ action: 'stop' }, ctx)).toBe('Stopped project');
+      const started = { instances: [{ session_id: 5, ready: true }], frozen: false };
+      mock.mockResponse(started);
+      expect(structuredOf(await editorEdit.execute({ action: 'run' }, ctx))).toEqual(started);
+      expect(mock.calls[0].params.instances).toBe(1);
+      mock.mockResponse({ session_id: 5, stopped: true });
+      expect(structuredOf(await editorEdit.execute({ action: 'stop', session_id: 5 }, ctx)))
+        .toEqual({ session_id: 5, stopped: true });
+      expect(mock.calls[1].params.session_id).toBe(5);
     });
 
-    it('passes frozen through to run_project and says so', async () => {
-      mock.mockResponse({});
+    it('passes frozen and instance count through to run_project', async () => {
+      mock.mockResponse({ instances: [{ session_id: 5 }, { session_id: 6 }], frozen: true });
       const ctx = createToolContext(mock);
 
-      const result = await editorEdit.execute({ action: 'run', frozen: true }, ctx);
-      expect(result).toContain('frozen from frame 0');
+      const result = await editorEdit.execute({ action: 'run', frozen: true, instances: 2 }, ctx);
+      expect(structuredOf(result).instances.map((instance: { session_id: number }) => instance.session_id)).toEqual([5, 6]);
+      expect(structuredOf(result).frozen).toBe(true);
       expect(mock.calls[0].command).toBe('run_project');
       expect(mock.calls[0].params.frozen).toBe(true);
+      expect(mock.calls[0].params.instances).toBe(2);
     });
   });
 

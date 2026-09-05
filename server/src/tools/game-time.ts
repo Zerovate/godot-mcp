@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { sessionId } from './session-target.js';
 import { defineTool } from '../core/define-tool.js';
 import { structured } from '../core/structured.js';
 import { deriveTimeouts, STEP_BUDGET_CAP_MS } from '../connection/timeouts.js';
@@ -32,11 +33,13 @@ function stepBudgetMs(args: GameTimeArgs): number {
 const GameTimeSchema = z
   .discriminatedUnion('action', [
     z.object({
+      session_id: sessionId,
       action: z
         .literal('freeze')
         .describe('Pause the game under agent control. All observation tools (screenshots, runtime state, godot_node_read find) keep working while frozen — take as long as you need.'),
     }),
     z.object({
+      session_id: sessionId,
       action: z
         .literal('step')
         .describe('Advance a bounded slice of game time, then re-freeze. Freezes first if the game is running, so step is always a safe first call. Pass exactly one of duration_ms or frames.'),
@@ -64,6 +67,7 @@ const GameTimeSchema = z
         .describe('Optional GDScript expressions evaluated on the window\'s last frame and returned as a { expression: value } map, exactly as for step_until (same scope: autoloads by name, `tree`, `root`, engine singletons). Reads what the inputs did in the same call instead of a follow-up exec.'),
     }),
     z.object({
+      session_id: sessionId,
       action: z
         .literal('step_until')
         .describe('Advance game time until a GDScript predicate becomes true (or a safety cap is hit), then re-freeze. Freezes first if the game is running, so it is a safe first call. Use this instead of step when you do not know how long to advance to reach the state worth observing.'),
@@ -88,11 +92,13 @@ const GameTimeSchema = z
         .describe('Optional input timeline driven inside the window, exactly like step (same vocabulary: actions, joypad buttons, axes, stick vectors, raw keys, relative mouse-look look:[dx,dy] — e.g. hold a stick deflection while waiting for an enemy to appear). Holds are released by window end.'),
     }),
     z.object({
+      session_id: sessionId,
       action: z
         .literal('thaw')
         .describe('Resume real-time play, restoring the game\'s own pause state (an open pause menu stays open).'),
     }),
     z.object({
+      session_id: sessionId,
       action: z
         .literal('status')
         .describe('Report the freeze state: `frozen` is authoritative for the current state; `frozen_wall_ms` is real wall-clock held (not game time); `launched_frozen` is a historical flag (this run booted frozen) and stays true after thaw. Also reports the game\'s own pause intent, time scale, and whether game code is contesting the freeze.'),
@@ -138,7 +144,7 @@ export const gameTime = defineTool({
           frozen: boolean;
           was_frozen: boolean;
           game_paused: boolean;
-        }>('game_time_freeze');
+        }>('game_time_freeze', { session_id: args.session_id });
         const note = result.was_frozen ? ' (was already frozen)' : '';
         const paused = result.game_paused ? ' Game\'s own pause menu is open; step will not advance gameplay until it is dismissed.' : '';
         return `Frozen${note}. Game time is stopped; observe freely, then step or thaw.${paused}`;
@@ -147,6 +153,7 @@ export const gameTime = defineTool({
       case 'step': {
         const t = deriveTimeouts(stepBudgetMs(args));
         const result = await godot.sendCommand<StepResult>('game_time_step', {
+          session_id: args.session_id,
           duration_ms: args.duration_ms,
           frames: args.frames,
           report: args.report,
@@ -163,6 +170,7 @@ export const gameTime = defineTool({
       case 'step_until': {
         const t = deriveTimeouts(stepBudgetMs(args));
         const result = await godot.sendCommand<StepResult>('game_time_step_until', {
+          session_id: args.session_id,
           until: args.until,
           max_ms: args.max_ms ?? STEP_DEFAULT_MS,
           report: args.report,
@@ -180,7 +188,7 @@ export const gameTime = defineTool({
           was_frozen: boolean;
           game_paused: boolean;
           frozen_wall_ms?: number;
-        }>('game_time_thaw');
+        }>('game_time_thaw', { session_id: args.session_id });
         if (!result.was_frozen) {
           return 'Was not frozen; game continues in real time.';
         }
@@ -189,7 +197,7 @@ export const gameTime = defineTool({
       }
 
       case 'status': {
-        const result = await godot.sendCommand<Record<string, unknown>>('game_time_status');
+        const result = await godot.sendCommand<Record<string, unknown>>('game_time_status', { session_id: args.session_id });
         return structured(result);
       }
     }

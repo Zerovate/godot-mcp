@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { sessionId } from './session-target.js';
 import { defineTool } from '../core/define-tool.js';
 import { deriveTimeouts, INPUT_BUDGET_CAP_MS } from '../connection/timeouts.js';
 import { staleAdvisory, type ProjectStaleness } from '../utils/project-staleness.js';
@@ -212,9 +213,11 @@ export function inputSkewWarning(
 
 const InputSchema = z.discriminatedUnion('action', [
   z.object({
+    session_id: sessionId,
     action: z.literal('get_map').describe('List available input actions from the project Input Map'),
   }),
   z.object({
+    session_id: sessionId,
     action: z.literal('sequence').describe('Execute an input timeline. While the game runs at real speed, keep tightly-timed inputs in ONE call — e.g. the run-starting menu press AND the gameplay that follows — because seconds of uncontrolled game time pass between two separate tool calls. For a window longer than one call can hold, drive input through godot_game_time step instead.'),
     inputs: z
       .array(InputEntrySchema)
@@ -279,6 +282,7 @@ const InputSchema = z.discriminatedUnion('action', [
       ),
   }),
   z.object({
+    session_id: sessionId,
     action: z.literal('type_text').describe('Type text into the focused UI element'),
     text: z
       .string()
@@ -323,7 +327,7 @@ export const input = defineTool({
           // edited on disk after load (#245), so the map below may be incomplete.
           // The game-sourced path reads fresh from the bridge and never sets it.
           staleness?: ProjectStaleness;
-        }>('get_input_map');
+        }>('get_input_map', { session_id: args.session_id });
         const advisory = staleAdvisory(result.staleness);
 
         if (result.actions.length === 0) {
@@ -380,6 +384,7 @@ export const input = defineTool({
           input_kinds?: Record<string, number>;
           error?: string;
         }>('execute_input_sequence', {
+          session_id: args.session_id,
           inputs: compileInputEntries(inputs),
           report: args.report,
           screenshot_at_ms: args.screenshot_at_ms,
@@ -481,7 +486,7 @@ export const input = defineTool({
           chars_typed: number;
           submitted: boolean;
           error?: string;
-        }>('type_text', { text: args.text, delay_ms: args.delay_ms, submit: args.submit, relay_timeout_ms: t.relayMs }, { timeoutMs: t.serverMs });
+        }>('type_text', { session_id: args.session_id, text: args.text, delay_ms: args.delay_ms, submit: args.submit, relay_timeout_ms: t.relayMs }, { timeoutMs: t.serverMs });
 
         if (result.error) {
           throw new Error(result.error);

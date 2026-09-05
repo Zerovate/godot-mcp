@@ -20,6 +20,7 @@ Run one-shot GDScript inside the running game and return its value
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
+| `session_id` | integer | No | Target instance session_id from godot_editor_read list_instances. This ID is distinct from the debugger slot and is never reassigned within an editor lifetime. May be omitted when only one game is running. Multiple games require an explicit ID; a stopped ID never selects another game. Run operations on the same instance sequentially; a busy instance rejects overlapping requests. Different instances can run concurrently. |
 | `source` | string | Yes | GDScript statements, compiled as a function body. In scope: every autoload by its own name (e.g. `G.wave = 5`), `tree` (SceneTree), `root` (root Window) — the same context as step_until predicates — plus `holder`, a Node that survives scene reloads: attach nodes under it for behavior that persists between tool calls (a Timer-driven guard, an autofire bot), then manage them with list/remove/clear. Holder children pause with the tree, so a bot armed under a freeze acts only after thaw/step. Use an explicit `return` to get a value back (there is no implicit return): primitives (bool/int/float/String) come back intact; any other type (Array/Dictionary/Object/Vector2) comes back as a str() preview TRUNCATED to 200 chars — return JSON.stringify(...) yourself when you need structure. print() output is not returned — use return values (or, when the minimal-godot-mcp companion server is installed, its get_console_output). Function bodies cannot declare top-level func/class — use lambdas for callbacks, or build a sub-script with GDScript.new() and set_script() it onto a holder child for _process-driven behavior. No `await` (synchronous-only; compose with godot_game_time to wait). A runtime error or failed assert() breaks the game into the editor debugger mid-call; the relay auto-resumes it and the error comes back in runtime_errors (any debugger break in the call window is resumed, including a breakpoint hit by unrelated game code). |
 | `budget_ms` | integer | No | Wall-clock patience for the call, used to size the timeout cascade (default 10000, max 30000). NOT enforcement: a synchronous script cannot be preempted, so an infinite loop hangs the game past any budget — recover with godot_editor_edit stop. |
 
@@ -27,7 +28,9 @@ Run one-shot GDScript inside the running game and return its value
 
 List the nodes currently attached under the exec holder (name, class, age, processing state)
 
-*No parameters.*
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `session_id` | integer | No | Target instance session_id from godot_editor_read list_instances. This ID is distinct from the debugger slot and is never reassigned within an editor lifetime. May be omitted when only one game is running. Multiple games require an explicit ID; a stopped ID never selects another game. Run operations on the same instance sequentially; a busy instance rejects overlapping requests. Different instances can run concurrently. |
 
 #### `remove`
 
@@ -35,13 +38,16 @@ Remove one exec holder child by name (queue_free)
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
+| `session_id` | integer | No | Target instance session_id from godot_editor_read list_instances. This ID is distinct from the debugger slot and is never reassigned within an editor lifetime. May be omitted when only one game is running. Multiple games require an explicit ID; a stopped ID never selects another game. Run operations on the same instance sequentially; a busy instance rejects overlapping requests. Different instances can run concurrently. |
 | `name` | string | Yes | Node name as reported by list |
 
 #### `clear`
 
 Remove every exec holder child (queue_free all)
 
-*No parameters.*
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `session_id` | integer | No | Target instance session_id from godot_editor_read list_instances. This ID is distinct from the debugger slot and is never reassigned within an editor lifetime. May be omitted when only one game is running. Multiple games require an explicit ID; a stopped ID never selects another game. Run operations on the same instance sequentially; a busy instance rejects overlapping requests. Different instances can run concurrently. |
 
 ### Examples
 

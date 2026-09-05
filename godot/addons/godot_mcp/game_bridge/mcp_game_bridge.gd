@@ -100,8 +100,52 @@ func _emit_bridge_ready(scene_path: String) -> void:
 	if _ready_announced:
 		return
 	_ready_announced = true
-	EngineDebugger.send_message("godot_mcp:bridge_ready", [scene_path])
+	EngineDebugger.send_message("godot_mcp:bridge_ready", [scene_path, {
+		"process_id": OS.get_process_id(),
+		"remote_debug_uri": _actual_remote_debug_uri(),
+		"args": Array(OS.get_cmdline_user_args()),
+		"frozen": _frozen,
+	}])
 	MCPLog.info("Game bridge: ready to drive (%s)" % scene_path)
+
+
+static func _remote_debug_uri(arguments: PackedStringArray) -> String:
+	for index in arguments.size():
+		if arguments[index] == "--remote-debug" and index + 1 < arguments.size():
+			return arguments[index + 1]
+		if arguments[index].begins_with("--remote-debug="):
+			return arguments[index].trim_prefix("--remote-debug=")
+	return ""
+
+
+static func _remote_debug_uri_from_command_line(command_line: String) -> String:
+	var pattern := RegEx.new()
+	pattern.compile("--remote-debug(?:=|\\s+)[\\\"']?([^\\s\\\"']+)")
+	var matched := pattern.search(command_line)
+	return matched.get_string(1) if matched else ""
+
+
+static func _actual_remote_debug_uri() -> String:
+	var inherited := OS.get_environment("GODOT_MCP_REMOTE_DEBUG_URI")
+	if not inherited.is_empty():
+		return inherited
+	var uri := _remote_debug_uri(OS.get_cmdline_args())
+	if not uri.is_empty():
+		return uri
+	# Godot consumes --remote-debug before publishing OS.get_cmdline_args().
+	# Query this process's original argv, never infer an incremented server port.
+	if OS.get_name() == "Linux":
+		return _remote_debug_uri(FileAccess.get_file_as_string("/proc/self/cmdline").split(String.chr(0)))
+	var output: Array = []
+	var status := -1
+	if OS.get_name() == "Windows":
+		var command := "(Get-CimInstance Win32_Process -Filter 'ProcessId = %d').CommandLine" % OS.get_process_id()
+		status = OS.execute("powershell.exe", PackedStringArray(["-NoProfile", "-NonInteractive", "-Command", command]), output)
+	elif OS.get_name() == "macOS":
+		status = OS.execute("/bin/ps", PackedStringArray(["-p", str(OS.get_process_id()), "-o", "command="]), output)
+	if status == 0 and not output.is_empty():
+		return _remote_debug_uri_from_command_line(str(output[0]))
+	return ""
 
 
 func _process(delta: float) -> void:
@@ -407,6 +451,10 @@ func _release_held_actions() -> void:
 
 func _on_debugger_message(message: String, data: Array) -> bool:
 	match message:
+		"quit":
+			EngineDebugger.send_message("godot_mcp:game_response", ["quit", {"stopping": true}])
+			get_tree().quit.call_deferred()
+			return true
 		"take_screenshot":
 			_take_screenshot_deferred.call_deferred(data)
 			return true

@@ -13,6 +13,11 @@
         ],
         "description": "get_map: List available input actions from the project Input Map\nsequence: Execute an input timeline. While the game runs at real speed, keep tightly-timed inputs in ONE call — e.g. the run-starting menu press AND the gameplay that follows — because seconds of uncontrolled game time pass between two separate tool calls. For a window longer than one call can hold, drive input through godot_game_time step instead.\ntype_text: Type text into the focused UI element"
       },
+      "session_id": {
+        "description": "Target instance session_id from godot_editor_read list_instances. This ID is distinct from the debugger slot and is never reassigned within an editor lifetime. May be omitted when only one game is running. Multiple games require an explicit ID; a stopped ID never selects another game. Run operations on the same instance sequentially; a busy instance rejects overlapping requests. Different instances can run concurrently.",
+        "type": "integer",
+        "minimum": 0
+      },
       "inputs": {
         "minItems": 1,
         "type": "array",

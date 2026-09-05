@@ -47,8 +47,8 @@ func find_nodes(params: Dictionary) -> Dictionary:
 	if name_pattern.is_empty() and type_filter.is_empty():
 		return _error("INVALID_PARAMS", "At least one of name_pattern or type is required")
 
-	var debugger := _plugin.get_debugger_plugin() as MCPDebuggerPlugin
-	if debugger and EditorInterface.is_playing_scene() and debugger.has_active_session():
+	var debugger := _get_debugger_plugin()
+	if debugger and _has_game_session() and debugger.has_active_session():
 		return await _find_nodes_via_game(debugger, name_pattern, type_filter, root_path)
 
 	var scene_check := _require_scene_open()
@@ -69,7 +69,7 @@ func find_nodes(params: Dictionary) -> Dictionary:
 	return _success({"matches": matches, "count": matches.size()})
 
 
-func _find_nodes_via_game(debugger: MCPDebuggerPlugin, name_pattern: String, type_filter: String, root_path: String) -> Dictionary:
+func _find_nodes_via_game(debugger: MCPGameSession, name_pattern: String, type_filter: String, root_path: String) -> Dictionary:
 	_find_nodes_pending = true
 	_find_nodes_result = {}
 

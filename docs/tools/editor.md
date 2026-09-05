@@ -11,9 +11,15 @@ Editor control, debugging, and screenshot tools
 
 ## godot_editor_read
 
-Observe the editor and running game: get editor state (open scene, play state, camera, viewport), read the current node selection, pull editor log messages (with an incremental cursor) and stack traces, and capture lossless PNG screenshots of the running game or an editor viewport. Reach for it to check what the editor sees before and after a change; screenshot_game needs a running game, while every other action works in the bare editor. It changes nothing - to select nodes, run/stop/restart, or move the 2D viewport use godot_editor_edit; errors from the running game (not the editor process) come via minimal-godot-mcp's get_console_output when that companion server is installed.
+Observe the editor and running games: list_instances returns target IDs and readiness; get editor state (open scene, play state, camera, viewport), read the current node selection, pull editor log messages (with an incremental cursor) and stack traces, and capture lossless PNG screenshots of the running game or an editor viewport. Reach for it to check what the editor sees before and after a change; screenshot_game needs a running game, while every other action works in the bare editor. It changes nothing - to select nodes, run/stop/restart, or move the 2D viewport use godot_editor_edit; errors from the running game (not the editor process) come via minimal-godot-mcp's get_console_output when that companion server is installed.
 
 ### Actions
+
+#### `list_instances`
+
+List connected game instances with stable session_id, debugger slot, PID, scene, and readiness. Use session_id to target runtime tools.
+
+*No parameters.*
 
 #### `get_state`
 
@@ -50,6 +56,7 @@ Capture a lossless PNG of the running game. Each frame persists in context every
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
+| `session_id` | integer | No | Target instance session_id from godot_editor_read list_instances. This ID is distinct from the debugger slot and is never reassigned within an editor lifetime. May be omitted when only one game is running. Multiple games require an explicit ID; a stopped ID never selects another game. Run operations on the same instance sequentially; a busy instance rejects overlapping requests. Different instances can run concurrently. |
 | `max_width` | integer | No | Maximum width in pixels (default: 900). Cost scales with resolution (~1 visual token per 28x28px patch; a 900px 16:9 frame ≈ 600 tokens, a native 1080p frame ≈ 2700 on Opus). 640 is the legibility floor for chip-dense UI — still crisp; 512 is the edge and 384 breaks fine print — so drop toward 640 to roughly halve per-frame cost when you do not need the finest text, and raise above 900 only when detail is genuinely unreadable. |
 
 #### `screenshot_editor`
@@ -62,6 +69,13 @@ Capture a lossless PNG of an editor viewport. Same context cost as screenshot_ga
 | `max_width` | integer | No | Maximum width in pixels (default: 900). Cost scales with resolution (~1 visual token per 28x28px patch; a 900px 16:9 frame ≈ 600 tokens). 640 is the legibility floor for chip-dense UI (512 is the edge, 384 breaks fine print), so drop toward 640 to roughly halve per-frame cost when you do not need the finest text; raise above 900 only when detail is unreadable. |
 
 ### Examples
+
+```json
+// list_instances
+{
+  "action": "list_instances"
+}
+```
 
 ```json
 // get_state
@@ -77,20 +91,13 @@ Capture a lossless PNG of an editor viewport. Same context cost as screenshot_ga
 }
 ```
 
-```json
-// get_log_messages
-{
-  "action": "get_log_messages"
-}
-```
-
-*3 more actions available: `get_stack_trace`, `screenshot_game`, `screenshot_editor`*
+*4 more actions available: `get_log_messages`, `get_stack_trace`, `screenshot_game`, `screenshot_editor`*
 
 ---
 
 ## godot_editor_edit
 
-Drive the editor: select a node, run or stop the project, restart the editor, rescan the filesystem to import assets written outside the editor, and center/zoom the 2D viewport. Use run with frozen=true as the deterministic-playtest entry point (game time holds at frame 0 until godot_game_time steps or thaws it). To test edited gameplay scripts just stop then run — the launched game loads .gd/.tscn fresh from disk; reserve restart for EDITOR-side staleness (edited @tool/addon code, a stale project.godot, or a cached .gdshader). For observation only (state, selection, logs, screenshots) use godot_editor_read instead; restart does not start a cold editor, so one must already be running.
+Drive the editor: select a node, run one to four game instances, launch another instance with its own user arguments, stop one explicit session_id or stop_all, restart the editor, rescan the filesystem to import assets written outside the editor, and center/zoom the 2D viewport. Use run with frozen=true as the deterministic-playtest entry point (game time holds at frame 0 until godot_game_time steps or thaws it). To test edited gameplay scripts just stop then run — the launched game loads .gd/.tscn fresh from disk; reserve restart for EDITOR-side staleness (edited @tool/addon code, a stale project.godot, or a cached .gdshader). For observation only (state, selection, logs, screenshots) use godot_editor_read instead; restart does not start a cold editor, so one must already be running.
 
 ### Actions
 
@@ -104,16 +111,35 @@ Select a node in the editor
 
 #### `run`
 
-Run the project
+Start a fresh run. Fails if any game is already active; use launch to append an instance or stop_all before a fresh run.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
+| `instances` | integer | No | Number of game instances to start (default 1, maximum 4). Each returns its own session_id. |
 | `scene_path` | string | No | Scene to run (optional, defaults to main scene) |
 | `frozen` | boolean | No | Launch with game time frozen from frame 0 (gameplay never starts racing your latency). Use godot_game_time step/thaw to advance. |
 
+#### `launch`
+
+Append one game instance to this editor. Requires an existing ready instance to discover the actual debugger endpoint.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `scene_path` | string | No | Scene to run (defaults to the project main scene) |
+| `frozen` | boolean | No | Launch this instance frozen from frame 0 |
+| `args` | string[] | No | Game user arguments after --, passed as separate arguments. Use different values for host/client roles or game network ports. |
+
 #### `stop`
 
-Stop the running project
+Stop one game instance. Omit session_id only when exactly one instance is active. Other instances keep running.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `session_id` | integer | No | Target instance session_id from godot_editor_read list_instances. This ID is distinct from the debugger slot and is never reassigned within an editor lifetime. May be omitted when only one game is running. Multiple games require an explicit ID; a stopped ID never selects another game. Run operations on the same instance sequentially; a busy instance rejects overlapping requests. Different instances can run concurrently. |
+
+#### `stop_all`
+
+Stop every game instance controlled by this editor
 
 *No parameters.*
 
@@ -161,13 +187,13 @@ Center and/or zoom the 2D editor viewport. Pass at least one parameter; omitted 
 ```
 
 ```json
-// stop
+// launch
 {
-  "action": "stop"
+  "action": "launch"
 }
 ```
 
-*3 more actions available: `restart`, `rescan`, `set_viewport_2d`*
+*5 more actions available: `stop`, `stop_all`, `restart`, `rescan`, `set_viewport_2d`*
 
 ---
 

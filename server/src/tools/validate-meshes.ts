@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { sessionId } from './session-target.js';
 import { defineTool } from '../core/define-tool.js';
 import { structured } from '../core/structured.js';
 import type { AnyToolDefinition } from '../core/types.js';
@@ -21,6 +22,7 @@ interface ValidateMeshesResponse {
 }
 
 const ValidateMeshesSchema = z.object({
+  session_id: sessionId,
   max_findings: z
     .number()
     .int()
@@ -56,6 +58,7 @@ export const validateMeshes = defineTool({
 
   async execute(args, { godot }) {
     const result = await godot.sendCommand<ValidateMeshesResponse>('validate_meshes', {
+      session_id: args.session_id,
       max_findings: args.max_findings ?? 25,
     });
     // Nothing checked is NOT a clean bill — saying "no problems" over zero

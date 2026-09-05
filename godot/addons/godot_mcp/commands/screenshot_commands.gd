@@ -17,12 +17,12 @@ func get_commands() -> Dictionary:
 
 
 func capture_game_screenshot(params: Dictionary) -> Dictionary:
-	if not EditorInterface.is_playing_scene():
+	if not _has_game_session():
 		return _error("NOT_RUNNING", "No game is currently running. Use run_project first.")
 
 	var max_width: int = params.get("max_width", DEFAULT_MAX_WIDTH)
 
-	var debugger_plugin = _plugin.get_debugger_plugin() if _plugin else null
+	var debugger_plugin = _get_debugger_plugin()
 	if debugger_plugin == null:
 		return _error("NO_DEBUGGER", "Debugger plugin not available")
 
@@ -58,7 +58,7 @@ func _on_screenshot_received(success: bool, image_base64: String, width: int, he
 		# Mesh-integrity warnings ride the same game message (no extra
 		# round-trip, no version-skew timeout); pass them through so the
 		# server can attach the advisory to the image.
-		var dp = _plugin.get_debugger_plugin() if _plugin else null
+		var dp = _get_debugger_plugin()
 		if dp != null and not (dp.last_screenshot_warnings as Array).is_empty():
 			payload["mesh_warnings"] = dp.last_screenshot_warnings
 		_screenshot_result = _success(payload)

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { sessionId } from './session-target.js';
 import { defineTool } from '../core/define-tool.js';
 import { structured } from '../core/structured.js';
 import { staleAdvisory, type ProjectStaleness } from '../utils/project-staleness.js';
@@ -62,6 +63,7 @@ interface LogMessagesResponse {
 }
 
 const EditorReadSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('list_instances').describe('List connected game instances with stable session_id, debugger slot, PID, scene, and readiness. Use session_id to target runtime tools.') }),
   z.object({ action: z.literal('get_state').describe('Get editor state: current scene, play state, version, camera, viewport') }),
   z.object({ action: z.literal('get_selection').describe('Get the currently selected nodes') }),
   z.object({
@@ -85,6 +87,7 @@ const EditorReadSchema = z.discriminatedUnion('action', [
   }),
   z.object({ action: z.literal('get_stack_trace').describe('Get the most recent error stack trace') }),
   z.object({
+    session_id: sessionId,
     action: z
       .literal('screenshot_game')
       .describe(
@@ -124,14 +127,25 @@ const EditorEditSchema = z
       node_path: z.string().describe('Path to node to select'),
     }),
     z.object({
-      action: z.literal('run').describe('Run the project'),
+      action: z.literal('run').describe('Start a fresh run. Fails if any game is already active; use launch to append an instance or stop_all before a fresh run.'),
+      instances: z.number().int().min(1).max(4).optional().describe('Number of game instances to start (default 1, maximum 4). Each returns its own session_id.'),
       scene_path: z.string().optional().describe('Scene to run (optional, defaults to main scene)'),
       frozen: z
         .boolean()
         .optional()
         .describe('Launch with game time frozen from frame 0 (gameplay never starts racing your latency). Use godot_game_time step/thaw to advance.'),
     }),
-    z.object({ action: z.literal('stop').describe('Stop the running project') }),
+    z.object({
+      action: z.literal('launch').describe('Append one game instance to this editor. Requires an existing ready instance to discover the actual debugger endpoint.'),
+      scene_path: z.string().optional().describe('Scene to run (defaults to the project main scene)'),
+      frozen: z.boolean().optional().describe('Launch this instance frozen from frame 0'),
+      args: z.array(z.string()).optional().describe('Game user arguments after --, passed as separate arguments. Use different values for host/client roles or game network ports.'),
+    }),
+    z.object({
+      action: z.literal('stop').describe('Stop one game instance. Omit session_id only when exactly one instance is active. Other instances keep running.'),
+      session_id: sessionId,
+    }),
+    z.object({ action: z.literal('stop_all').describe('Stop every game instance controlled by this editor') }),
     z.object({
       action: z
         .literal('restart')
@@ -180,10 +194,13 @@ export const editorRead = defineTool({
   name: 'godot_editor_read',
   annotations: { title: 'Editor Control (read)', readOnlyHint: true, destructiveHint: false, openWorldHint: false },
   description:
-    'Observe the editor and running game: get editor state (open scene, play state, camera, viewport), read the current node selection, pull editor log messages (with an incremental cursor) and stack traces, and capture lossless PNG screenshots of the running game or an editor viewport. Reach for it to check what the editor sees before and after a change; screenshot_game needs a running game, while every other action works in the bare editor. It changes nothing - to select nodes, run/stop/restart, or move the 2D viewport use godot_editor_edit; errors from the running game (not the editor process) come via minimal-godot-mcp\'s get_console_output when that companion server is installed.',
+    'Observe the editor and running games: list_instances returns target IDs and readiness; get editor state (open scene, play state, camera, viewport), read the current node selection, pull editor log messages (with an incremental cursor) and stack traces, and capture lossless PNG screenshots of the running game or an editor viewport. Reach for it to check what the editor sees before and after a change; screenshot_game needs a running game, while every other action works in the bare editor. It changes nothing - to select nodes, run/stop/restart, or move the 2D viewport use godot_editor_edit; errors from the running game (not the editor process) come via minimal-godot-mcp\'s get_console_output when that companion server is installed.',
   schema: EditorReadSchema,
   async execute(args: EditorReadArgs, { godot }) {
     switch (args.action) {
+      case 'list_instances': {
+        return structured(await godot.sendCommand<Record<string, unknown>>('list_instances'));
+      }
       case 'get_state': {
         const result = await godot.sendCommand<{
           current_scene: string | null;
@@ -252,7 +269,7 @@ export const editorRead = defineTool({
       case 'screenshot_game': {
         const result = await godot.sendCommand<ScreenshotResponse>(
           'capture_game_screenshot',
-          { max_width: args.max_width }
+          { session_id: args.session_id, max_width: args.max_width }
         );
         const image = toImageContent(result.image_base64);
         // Mesh-integrity advisory: corrupt procedural meshes render as "too
@@ -291,7 +308,7 @@ export const editorEdit = defineTool({
   name: 'godot_editor_edit',
   annotations: { title: 'Editor Control (edit)', readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   description:
-    'Drive the editor: select a node, run or stop the project, restart the editor, rescan the filesystem to import assets written outside the editor, and center/zoom the 2D viewport. Use run with frozen=true as the deterministic-playtest entry point (game time holds at frame 0 until godot_game_time steps or thaws it). To test edited gameplay scripts just stop then run — the launched game loads .gd/.tscn fresh from disk; reserve restart for EDITOR-side staleness (edited @tool/addon code, a stale project.godot, or a cached .gdshader). For observation only (state, selection, logs, screenshots) use godot_editor_read instead; restart does not start a cold editor, so one must already be running.',
+    'Drive the editor: select a node, run one to four game instances, launch another instance with its own user arguments, stop one explicit session_id or stop_all, restart the editor, rescan the filesystem to import assets written outside the editor, and center/zoom the 2D viewport. Use run with frozen=true as the deterministic-playtest entry point (game time holds at frame 0 until godot_game_time steps or thaws it). To test edited gameplay scripts just stop then run — the launched game loads .gd/.tscn fresh from disk; reserve restart for EDITOR-side staleness (edited @tool/addon code, a stale project.godot, or a cached .gdshader). For observation only (state, selection, logs, screenshots) use godot_editor_read instead; restart does not start a cold editor, so one must already be running.',
   schema: EditorEditSchema,
   async execute(args: EditorEditArgs, { godot }) {
     switch (args.action) {
@@ -301,16 +318,27 @@ export const editorEdit = defineTool({
       }
 
       case 'run': {
-        await godot.sendCommand('run_project', { scene_path: args.scene_path, frozen: args.frozen });
-        const target = args.scene_path ? `scene: ${args.scene_path}` : 'project';
-        return args.frozen
-          ? `Running ${target} frozen from frame 0 — use godot_game_time step/thaw to advance`
-          : `Running ${target}`;
+        return structured(await godot.sendCommand<Record<string, unknown>>('run_project', {
+          scene_path: args.scene_path,
+          frozen: args.frozen,
+          instances: args.instances ?? 1,
+        }, { timeoutMs: 50_000 }));
+      }
+
+      case 'launch': {
+        return structured(await godot.sendCommand<Record<string, unknown>>('launch_instance', {
+          scene_path: args.scene_path,
+          frozen: args.frozen,
+          args: args.args,
+        }, { timeoutMs: 25_000 }));
       }
 
       case 'stop': {
-        await godot.sendCommand('stop_project');
-        return 'Stopped project';
+        return structured(await godot.sendCommand<Record<string, unknown>>('stop_project', { session_id: args.session_id }));
+      }
+
+      case 'stop_all': {
+        return structured(await godot.sendCommand<Record<string, unknown>>('stop_all_instances', {}, { timeoutMs: 25_000 }));
       }
 
       case 'restart': {

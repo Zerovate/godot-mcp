@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { sessionId } from './session-target.js';
 import { defineTool } from '../core/define-tool.js';
 import { structured } from '../core/structured.js';
 import type { AnyToolDefinition } from '../core/types.js';
@@ -270,6 +271,7 @@ const INCLUDE_VALUES = ['transform', 'velocity', 'anim', 'groups', 'onscreen', '
 
 const RuntimeStateSchema = z.discriminatedUnion('action', [
   z.object({
+    session_id: sessionId,
     action: z
       .literal('digest')
       .describe(
@@ -326,6 +328,7 @@ const RuntimeStateSchema = z.discriminatedUnion('action', [
       .describe('Subset of fields to include (default: all available). "ui" adds global_rect / visible_in_tree / has_focus / text on Controls.'),
   }),
   z.object({
+    session_id: sessionId,
     action: z
       .literal('watch_start')
       .describe(
@@ -336,9 +339,9 @@ const RuntimeStateSchema = z.discriminatedUnion('action', [
         'rect) for Controls; any key from _mcp_state() for custom game state (e.g. "health", "ammo"); ' +
         'or a plain numeric/String/bool property name. ' +
         'TIMING: watch_start and the action that drives state change (godot_input sequence, ' +
-        'player input, etc.) must overlap within the watch window. Send both in the same ' +
-        'parallel tool call batch, or use a duration_ms large enough (3000–4000ms) to cover ' +
-        'the round-trip latency before the driving action is approved and sent. ' +
+        'player input, etc.) must overlap within the watch window. Start the input ' +
+        'sequence after watch_start returns. Use a duration_ms large enough (3000–4000ms) to cover ' +
+        'the round-trip latency before the driving action is sent. ' +
         'resolved_fields counts fields readable at start; every field that is not (node_not_found, ' +
         'not_readable = the key does not apply to that node type, field_cap) is listed in ' +
         'unresolved_fields with its reason.'
@@ -399,6 +402,7 @@ const RuntimeStateSchema = z.discriminatedUnion('action', [
     message: 'watch_start requires at least one of specs or signals',
   }),
   z.object({
+    session_id: sessionId,
     action: z
       .literal('watch_collect')
       .describe(
@@ -414,6 +418,7 @@ const RuntimeStateSchema = z.discriminatedUnion('action', [
       ),
   }),
   z.object({
+    session_id: sessionId,
     action: z
       .literal('watch_stop')
       .describe(
@@ -447,7 +452,7 @@ export const runtimeState = defineTool({
   async execute(args: RuntimeStateArgs, { godot }) {
     switch (args.action) {
       case 'digest': {
-        const params: Record<string, unknown> = {};
+        const params: Record<string, unknown> = { session_id: args.session_id };
         if (args.select !== undefined) params.select = args.select;
         if (args.group !== undefined) params.group = args.group;
         if (args.paths !== undefined) params.paths = args.paths;
@@ -474,6 +479,7 @@ export const runtimeState = defineTool({
           connected_signals?: number;
           unresolved_signals?: Array<{ path: string; signal: string; reason: string }>;
         }>('watch_start', {
+          session_id: args.session_id,
           specs: args.specs ?? [],
           hz: args.hz ?? 20,
           duration_ms: args.duration_ms ?? 1000,
@@ -528,11 +534,11 @@ export const runtimeState = defineTool({
       }
 
       case 'watch_collect': {
-        return summarizeWatchResponse(await godot.sendCommand<WatchRawResponse>('watch_collect'));
+        return summarizeWatchResponse(await godot.sendCommand<WatchRawResponse>('watch_collect', { session_id: args.session_id }));
       }
 
       case 'watch_stop': {
-        return summarizeWatchResponse(await godot.sendCommand<WatchRawResponse>('watch_stop'));
+        return summarizeWatchResponse(await godot.sendCommand<WatchRawResponse>('watch_stop', { session_id: args.session_id }));
       }
     }
   },
